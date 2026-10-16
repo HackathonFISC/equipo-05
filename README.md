@@ -7,9 +7,9 @@ Reto: 0
 
 ## Equipo
 
-- Integrante 1
-- Integrante 2
-- Integrante 3
+- David Moreno (@D4m0p)
+- Anna Hill (@annashill)
+- Diego Domínguez (@diegod-10)
 
 ## Problema
 
