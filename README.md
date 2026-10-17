@@ -316,7 +316,7 @@ tests/          pruebas automáticas
 
 ## Pruebas
 
-464 pruebas automáticas cubren el contrato, el Matching, la Ruta de formación, el
+465 pruebas automáticas cubren el contrato, el Matching, la Ruta de formación, el
 orquestador, el agente Perfil, los pesos ajustables, el reacomodo, "casi califica", la historia por joven, los permisos por rol, la API y la historia de los datos de demostración. Además, cada restricción
 de los solvers se verificó quitándola a propósito y comprobando que alguna prueba falla.
 
@@ -352,7 +352,7 @@ RUTA_BASE_DATOS=carga.db .venv/bin/uvicorn api.main:app --port 8010 --timeout-ke
 - **Agente Perfil** (`agentes/perfil/evals/`): 35 casos de reglas (extracción, validación de lo
   que propone el LLM y guardrails), con resultados en `agentes/perfil/evals/resultados.md`.
   Correr: `.venv/bin/python -m agentes.perfil.evals.correr`.
-- Además, 464 pruebas automáticas (ver "Pruebas").
+- Además, 465 pruebas automáticas (ver "Pruebas").
 
 ## Metodología
 
