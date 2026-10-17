@@ -353,6 +353,10 @@ RUTA_BASE_DATOS=carga.db .venv/bin/uvicorn api.main:app --port 8010 --timeout-ke
   Correr: `.venv/bin/python -m agentes.perfil.evals.correr`.
 - Además, 454 pruebas automáticas (ver "Pruebas").
 
+## Metodología
+
+Despliegue, funcionamiento y arquitectura en detalle: [`docs/metodologia.md`](docs/metodologia.md).
+
 ## Bitácora de IA
 
 Qué partes se hicieron con asistentes de programación de IA, cómo se trabajó y qué se revisó y
