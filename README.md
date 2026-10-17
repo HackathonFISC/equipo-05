@@ -260,8 +260,9 @@ agregue `--proxy-headers` para que el límite use la IP real del cliente.
 | Método | Ruta | Qué hace |
 |---|---|---|
 | `GET` | `/perfil/preguntas` | Preguntas de la entrevista corta (público) |
-| `POST` | `/perfil/cv` | CV en PDF, foto o texto → habilidades con evidencia (público, no guarda nada) |
+| `POST` | `/perfil/cv` | CV en PDF, foto o texto → habilidades con evidencia; de un PDF o foto devuelve también `texto_leido` para mostrar de dónde salió cada una (público, no guarda nada) |
 | `POST` | `/perfil/entrevista` | Respuestas de la entrevista → habilidades con evidencia (público, no guarda nada) |
+| `POST` | `/perfil/declarar` | Habilidad que el joven agrega a mano `{codigo, evidencia}`: solo de la taxonomía, nivel básico y marcada «Según la persona» (público) |
 | `POST` | `/perfil/transcribir` | Nota de voz o foto (CV o volante) → texto para que la persona lo revise; no decide nada (público) |
 | `POST` | `/jovenes` | Registra un joven y sus datos personales |
 | `GET` | `/jovenes/{id}/tarjetas` | Vacantes factibles para deslizar, con explicación |
@@ -315,7 +316,7 @@ tests/          pruebas automáticas
 
 ## Pruebas
 
-454 pruebas automáticas cubren el contrato, el Matching, la Ruta de formación, el
+464 pruebas automáticas cubren el contrato, el Matching, la Ruta de formación, el
 orquestador, el agente Perfil, los pesos ajustables, el reacomodo, "casi califica", la historia por joven, los permisos por rol, la API y la historia de los datos de demostración. Además, cada restricción
 de los solvers se verificó quitándola a propósito y comprobando que alguna prueba falla.
 
@@ -351,7 +352,7 @@ RUTA_BASE_DATOS=carga.db .venv/bin/uvicorn api.main:app --port 8010 --timeout-ke
 - **Agente Perfil** (`agentes/perfil/evals/`): 35 casos de reglas (extracción, validación de lo
   que propone el LLM y guardrails), con resultados en `agentes/perfil/evals/resultados.md`.
   Correr: `.venv/bin/python -m agentes.perfil.evals.correr`.
-- Además, 454 pruebas automáticas (ver "Pruebas").
+- Además, 464 pruebas automáticas (ver "Pruebas").
 
 ## Metodología
 
