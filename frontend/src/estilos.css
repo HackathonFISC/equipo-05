@@ -536,3 +536,16 @@ p.ahorro { background: var(--primario-claro); padding: 12px 14px; border-radius:
 .subir-foto { display: flex; align-items: center; gap: 14px; margin: 6px 0 14px; }
 .subir-foto label.boton { display: inline-block; cursor: pointer; margin-right: 10px; }
 @media (prefers-reduced-motion: reduce) { .foto-persona.revelar { animation: none; } }
+
+/* Tema oscuro: la pestaña activa en aqua para que se distinga del fondo */
+@media (prefers-color-scheme: dark) { :root:not([data-tema="claro"]) .pestanas button.activa { background: var(--primario); color: var(--sobre-primario); } }
+:root[data-tema="oscuro"] .pestanas button.activa { background: var(--primario); color: var(--sobre-primario); }
+.mutuo { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; } .mutuo > span { flex: 1; min-width: 200px; }
+
+/* Lugares sin punto de OpenStreetMap y botón de reinicio de la demo */
+.mapa-sin-punto { margin: 6px 0 0; font-size: .78rem; color: #f2b84b; }
+.reiniciar-demo { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin: -6px 0 6px; font-size: .9rem; }
+.reiniciar-confirmar { display: grid; gap: 8px; margin-bottom: 12px; }
+.reiniciar-confirmar .acciones { margin: 0; }
+
+.logo-empresa.imagen { border-radius: 24%; object-fit: cover; background: none; }

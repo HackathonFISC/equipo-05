@@ -5,7 +5,10 @@ Documentación interactiva: http://localhost:8010/docs
 """
 from __future__ import annotations
 
+import difflib
+import json
 import os
+from pathlib import Path
 from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
@@ -23,6 +26,7 @@ from orquestador import (
 from agentes.perfil import ClienteLLM, cliente_desde_entorno
 from agentes.perfil.rutas import crear_router as rutas_perfil
 from orquestador.arranque import orquestador_desde_entorno
+from agentes.matching.traslados import coordenadas_osm
 from orquestador.interfaces import es_oferta_incompleta, faltantes_de
 
 from .limites import LimiteAnonimos, tope_desde_entorno
@@ -224,6 +228,35 @@ def crear_app(orq: Orquestador, cliente_llm: ClienteLLM | None = None,
         return orq.almacen.listar(Curso)
 
     # ----- datos de referencia y credenciales (orientador) -----
+    def validar_ubicacion(codigo: str) -> None:
+        """Una ubicación que no conocemos no se acepta en silencio (no saldría en el mapa ni
+        tendría viajes, y nadie haría match): 400 con los corregimientos de nombre más parecido."""
+        conocidos = {t.origen for t in orq.almacen.traslados()} | {t.destino for t in orq.almacen.traslados()}
+        if not conocidos or codigo in conocidos or codigo in coordenadas_osm():
+            return
+        todos = sorted(conocidos | set(coordenadas_osm()))
+        parecidos = difflib.get_close_matches(codigo, todos, n=3, cutoff=0.3) or todos[:3]
+        nombres = ", ".join(p.replace("_", " ").title() for p in parecidos)
+        raise HTTPException(status_code=400, detail=(
+            f"No tenemos la ubicación «{codigo.replace('_', ' ')}» en el mapa ni datos de cómo llegar. "
+            f"Elija el corregimiento más cercano de la lista (por ejemplo: {nombres})."))
+
+    @app.post("/demo/reiniciar")
+    def reiniciar_demo(_: Identidad = Depends(solo_orientador)) -> dict:
+        """Vuelve a los datos de demostración: borra todo y carga la semilla (con matching)."""
+        if os.getenv("PERMITIR_REINICIAR_DEMO", "1") == "0":
+            raise HTTPException(status_code=403, detail="El reinicio de la demostración está desactivado")
+        from scripts.semilla_demo import DATOS, cargar, credenciales_demo
+        datos = json.loads(Path(DATOS).read_text(encoding="utf-8"))
+        automatico, orq.automatico = orq.automatico, False   # carga masiva: sin disparos automáticos
+        try:
+            orq.almacen.vaciar()
+            resumen = cargar(orq, datos, con_matching=True)
+            credenciales_demo(orq, datos)
+        finally:
+            orq.automatico = automatico
+        return {"vacantes": resumen["vacantes"], "jovenes": resumen["jovenes"], "cursos": resumen["cursos"]}
+
     @app.post("/traslados", status_code=204)
     def cargar_traslados(traslados: list[Traslado], _: Identidad = Depends(solo_orientador)):
         orq.almacen.guardar_traslados(traslados)
@@ -235,6 +268,8 @@ def crear_app(orq: Orquestador, cliente_llm: ClienteLLM | None = None,
 
     @app.post("/cursos", status_code=204)
     def cargar_cursos(cursos: list[Curso], _: Identidad = Depends(solo_orientador)):
+        for c in cursos:
+            validar_ubicacion(c.corregimiento)
         for c in cursos:
             orq.almacen.guardar(c)
 
@@ -269,6 +304,7 @@ def crear_app(orq: Orquestador, cliente_llm: ClienteLLM | None = None,
         existente = orq.almacen.obtener(Vacante, vacante.id)
         if existente is not None and not ident.es_empresa(existente.empresa_id):
             raise sin_permiso("Ese id de vacante pertenece a otra empresa")
+        validar_ubicacion(vacante.corregimiento)
         v, r = orq.publicar_vacante(vacante)
         return ResultadoPublicacion(vacante=v, auditoria=r)
 
@@ -311,6 +347,7 @@ def crear_app(orq: Orquestador, cliente_llm: ClienteLLM | None = None,
         existe = orq.almacen.obtener(Joven, registro.joven.id) is not None
         if existe and not (ident and ident.es_joven(registro.joven.id)):
             raise sin_permiso("Ese joven ya está registrado")
+        validar_ubicacion(registro.joven.corregimiento)
         joven = orq.registrar_joven(registro.joven, registro.datos)
         token = None
         if not existe:
@@ -346,7 +383,7 @@ def crear_app(orq: Orquestador, cliente_llm: ClienteLLM | None = None,
         """Todos los planes de formación de una vez (para la pestaña «Sin match»)."""
         return orq.almacen.listar(PlanFormacion)
 
-    # ----- foto del joven: la ven él, el orientador y SOLO la empresa con entrevista aprobada -----
+    # ----- foto del joven: la ven él, el orientador y SOLO la empresa con interés mutuo -----
     @app.put("/jovenes/{joven_id}/foto", status_code=204)
     def subir_foto(joven_id: str, foto: FotoSubida, ident: Identidad = Depends(requerida)):
         exigir_joven(ident, joven_id)
@@ -368,15 +405,29 @@ def crear_app(orq: Orquestador, cliente_llm: ClienteLLM | None = None,
         exigir_joven(ident, joven_id)
         orq.almacen.borrar_foto(joven_id)
 
+    def _empresa_puede_ver_foto(empresa_id: str, joven_id: str) -> bool:
+        def es_suya(vacante_id: str) -> bool:
+            v = orq.almacen.obtener(Vacante, vacante_id)
+            return v is not None and v.empresa_id == empresa_id
+        asignaciones = {a.vacante_id: a for a in orq.almacen.asignaciones(joven_id=joven_id)}
+        if any(a.vigente and a.aprobada and es_suya(v) for v, a in asignaciones.items()):
+            return True
+        si = {(d["actor"], d["vacante_id"]) for d in orq.almacen.deslizamientos_de(joven_id) if d["le_interesa"]}
+        for actor, v in si:
+            a = asignaciones.get(v)
+            descartada = a is not None and (not a.vigente or a.aprobada is False)
+            if actor == "empresa" and ("joven", v) in si and es_suya(v) and not descartada:
+                return True
+        return False
+
     @app.get("/jovenes/{joven_id}/foto")
     def ver_foto(joven_id: str, ident: Identidad = Depends(requerida)):
-        """La empresa solo la ve si tiene una entrevista APROBADA y vigente con esa persona: decide
-        por habilidades y conoce a la persona para la cita. A los demás, 404 (no se revela nada)."""
+        """La empresa solo la ve cuando ya aceptó a la persona y a ella también le interesa la
+        vacante (interés mutuo), o con una entrevista aprobada: elige por habilidades, sin foto, y
+        la foto aparece después de decidir. Si el orientador rechaza el match o se cancela, deja
+        de verla. A los demás, 404 (no se revela nada)."""
         permitido = ident.es_joven(joven_id) or (
-            ident.rol == "empresa" and any(
-                a.vigente and a.aprobada and orq.almacen.obtener(Vacante, a.vacante_id) is not None
-                and orq.almacen.obtener(Vacante, a.vacante_id).empresa_id == ident.sujeto
-                for a in orq.almacen.asignaciones(joven_id=joven_id)))
+            ident.rol == "empresa" and _empresa_puede_ver_foto(ident.sujeto, joven_id))
         foto = orq.almacen.foto(joven_id) if permitido else None
         if foto is None:
             raise HTTPException(status_code=404, detail="Sin foto")

@@ -123,8 +123,8 @@ tipados (`contrato/modelos.py`) y cada decisión queda registrada en la tabla `t
   campos están en `DatosPersonales`. Los solvers reciben solo `Joven`, así que no pueden
   usarlos aunque quisieran. La empresa ve habilidades y niveles **sin la evidencia textual**
   del CV, que puede traer nombre, cédula o teléfono. La foto es opcional y la empresa solo la ve cuando
-  su entrevista con esa persona ya está aprobada (hasta entonces decide por habilidades; el Auditor
-  bloquea a quien exige foto) (hay una prueba que lo verifica con un
+  ya aceptó a esa persona y a ella también le interesa la vacante (interés mutuo): elige por
+  habilidades, sin foto; el Auditor bloquea a quien exige foto (hay una prueba que lo verifica con un
   CV real de ejemplo).
 - **El puntaje separa lo geográfico.** El corregimiento solo puede mover los componentes
   de traslado y salario neto; el de habilidades no depende del lugar. Así el Auditor puede
@@ -132,7 +132,9 @@ tipados (`contrato/modelos.py`) y cada decisión queda registrada en la tabla `t
 - **Óptimo global, no voraz.** Asignar a cada joven su mejor opción en orden puede dejar a
   alguien sin trabajo; el solver maximiza el total respetando cupos (hay una prueba que lo
   demuestra: `test_optimo_global_gana_al_voraz`).
-- **Resultados reproducibles.** Los modelos se construyen siempre en el mismo orden y CP-SAT corre con semilla fija y un solo hilo.
+- **Resultados reproducibles.** Los modelos se construyen siempre en el mismo orden; el flujo
+  de costo mínimo del Matching es determinista, y CP-SAT, en la Ruta de formación, corre con
+  semilla fija y un solo hilo.
 - **Los avisos no frenan al sistema.** Los mensajes de Telegram se envían después de soltar
   el candado del orquestador; un canal lento o caído no bloquea las demás operaciones ni
   deshace la aprobación ya guardada.
@@ -195,6 +197,18 @@ El mapa ubica cada corregimiento con las coordenadas de `datos/corregimientos.cs
 `datos/FUENTES_CORREGIMIENTOS.md`). La Chorrera y San Miguelito, que en los datos de demostración
 son distritos y no tienen un punto único, se dibujan aproximados y con borde punteado; la costa y
 el Canal son trazos simplificados. Los tiempos y costos de viaje salen de la tabla de traslados.
+
+**Ubicaciones que faltan.** Si un viaje no está en la tabla pero los dos corregimientos tienen su
+punto de OpenStreetMap, el Matching lo **estima por distancia**: distancia en línea recta por el
+ritmo (minutos por km) de los viajes que sí están en la tabla, en su percentil 75 (conservador), y
+la tarifa oficial del corredor de MiBus. Queda marcado en los motivos como "estimado por
+distancia"; sin coordenadas con fuente no se estima nada. Un lugar que no conocemos no se acepta
+en silencio: `POST /vacantes`, `POST /cursos` y `POST /jovenes` responden 400 y sugieren los
+corregimientos de nombre más parecido, y el mapa lista aparte cualquier lugar sin punto.
+
+**Reiniciar la simulación:** el orientador tiene el botón "↺ Reiniciar simulación" (arriba a la
+derecha), que vuelve a los datos de demostración (`POST /demo/reiniciar`; se desactiva con
+`PERMITIR_REINICIAR_DEMO=0`).
 
 ## Instalación y ejecución
 
@@ -268,7 +282,8 @@ agregue `--proxy-headers` para que el límite use la IP real del cliente.
 | `POST` | `/perfil/transcribir` | Nota de voz o foto (CV o volante) → texto para que la persona lo revise; no decide nada (público) |
 | `POST` | `/jovenes` | Registra un joven y sus datos personales |
 | `PUT` / `DELETE` | `/jovenes/{id}/foto` | El joven sube (JPG, PNG o WebP, hasta 2 MB, validada por su contenido) o quita su foto |
-| `GET` | `/jovenes/{id}/foto` | La ven el propio joven, el orientador y **solo la empresa con una entrevista aprobada y vigente con esa persona**; para cualquier otro, 404 |
+| `POST` | `/demo/reiniciar` | Borra todo y vuelve a cargar los datos de demostración con su matching (orientador; `PERMITIR_REINICIAR_DEMO=0` lo desactiva) |
+| `GET` | `/jovenes/{id}/foto` | La ven el propio joven, el orientador y **solo la empresa que ya aceptó a esa persona con interés mutuo** (o con entrevista aprobada); si el orientador rechaza o se cancela, deja de verla; para cualquier otro, 404 |
 | `GET` | `/jovenes/{id}/tarjetas` | Vacantes factibles para deslizar, con explicación |
 | `GET` | `/jovenes/{id}/plan` | Ruta de formación |
 | `GET` | `/jovenes/{id}/historia` | Todo lo que el sistema hizo con el joven: estado actual y qué agente decidió qué, en orden |
@@ -357,6 +372,14 @@ RUTA_BASE_DATOS=carga.db .venv/bin/uvicorn api.main:app --port 8010 --timeout-ke
   que propone el LLM y guardrails), con resultados en `agentes/perfil/evals/resultados.md`.
   Correr: `.venv/bin/python -m agentes.perfil.evals.correr`.
 - Además, 465 pruebas automáticas (ver "Pruebas").
+
+## Video demo
+
+[`docs/video_demo.webm`](docs/video_demo.webm) (unos 2 minutos, sin voz, con rótulos): recorrido de la
+aplicación real por los cinco agentes. Muestra la oferta bloqueada por el Auditor, las tarjetas del
+joven con traslado y pasaje, la empresa que elige sin nombre ni foto, la foto que aparece con el
+interés mutuo, la aprobación de la orientadora, el «Casi califica» con su ruta de cursos, el centro
+de formación, la auditoría contrafactual y el historial de trazas.
 
 ## Metodología
 
