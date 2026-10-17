@@ -1,0 +1,48 @@
+import { useEffect, useState } from "react";
+import Ayuda from "../../componentes/Ayuda.jsx";
+import { api } from "../../api.js";
+import { conNombres, dinero, etiquetaJoven } from "../../nombres.js";
+
+// Jóvenes que no tienen match viable y la ruta de cursos que calculó el agente de Formación.
+export default function SinMatch({ cat }) {
+  const [planes, setPlanes] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    Promise.all([api.planes(), api.jovenes()]).then(([ps, js]) => {
+      const porId = Object.fromEntries(js.map((j) => [j.id, j]));
+      setPlanes(ps.map((p) => ({ joven: porId[p.joven_id] || { id: p.joven_id, corregimiento: "" }, plan: p })));
+    }).catch((e) => setError(e.message));
+  }, []);
+
+  if (error) return <p className="error">{error}</p>;
+  if (!planes) return <p className="centro">Cargando…</p>;
+  if (!planes.length) return <p className="vacio">Todos los jóvenes tienen al menos una vacante a su alcance.</p>;
+  return (
+    <>
+    <p className="suave intro">
+      Jóvenes que hoy no tienen ninguna vacante a su alcance, con los cursos que les abrirían opciones.
+      <Ayuda>La ruta la calcula el sistema: elige los cursos que cubren lo que les falta en menos tiempo
+      y dinero, que tengan cupo, que no choquen con su horario y a los que puedan llegar.</Ayuda>
+    </p>
+    <ul className="lista">
+      {planes.map(({ joven, plan }) => (
+        <li key={joven.id} className="item">
+          <div className="entrevista-cabeza">
+            <h3>{etiquetaJoven(joven.id, { [joven.id]: joven })}</h3>
+            <span className="estado-chip">{plan.semanas_total} sem · {dinero(plan.costo_total)}</span>
+          </div>
+          <p className="suave">Para: {plan.vacantes_objetivo.map((id) => cat.vacantes[id]?.titulo || id).join(", ")}</p>
+          <ol className="ruta">
+            {plan.cursos.map((id) => <li key={id}><b>{cat.cursos[id]?.nombre || id}</b>{cat.cursos[id] && <span className="suave"> · {cat.cursos[id].centro}</span>}</li>)}
+          </ol>
+          {plan.brecha_sin_cubrir.length > 0 && (
+            <p className="falta">Sin curso disponible para: {plan.brecha_sin_cubrir.map((c) => cat.habilidades[c] || c).join(", ")}</p>
+          )}
+          <ul className="motivos">{plan.motivos.map((m) => <li key={m}>{conNombres(m, cat.habilidades)}</li>)}</ul>
+        </li>
+      ))}
+    </ul>
+    </>
+  );
+}
